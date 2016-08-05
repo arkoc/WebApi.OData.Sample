@@ -1,7 +1,7 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace WebApi.OData.Sample.Models
+namespace WebApi.OData.Sample.Models.Abstract
 {
     public abstract class ModelBase
     {

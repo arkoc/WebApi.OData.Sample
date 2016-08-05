@@ -1,0 +1,138 @@
+﻿<#@ template debug="true" hostspecific="true" language="C#" #>
+<#@ output extension=".cs" #>
+<#@ assembly name="EnvDte" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="System.Web.Http.dll" #>
+<#@ assembly name="System.Data.Entity.Design.dll" #>
+<#@ import namespace="System.Diagnostics" #>
+<#@ import namespace="System" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.Globalization" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Reflection" #>
+<#@ import namespace="System.Data.Entity.Design.PluralizationServices" #>
+<#@ import namespace="EnvDTE" #>
+
+using WebApi.OData.Sample.Controllers.Abstract;
+using WebApi.OData.Sample.Models.Abstract;
+
+
+namespace WebApi.OData.Sample.Controllers
+{
+<#
+	// Modify this variables to fit your solution
+    var apiProjectName = "WebApi.OData.Sample"; // project name where controllers exists
+    var entitiesProjectName = "WebApi.OData.Sample"; // project name where entities exists
+
+    var dte = GetDTE();
+    var apiProject = GetProjecByName(dte, apiProjectName);
+	var entitiesProject = GetProjecByName(dte, entitiesProjectName);
+
+    var definedTypesInApi = GetProjectDefinedTypes(apiProject);
+    var definedTypesInEntities = GetProjectDefinedTypes(entitiesProject);
+
+    var controllerNames = GetControllerNames(definedTypesInApi);
+    var entityNames = GetEntityNames(definedTypesInEntities);
+
+	var ci = new CultureInfo("en-us");
+	var ps = PluralizationService.CreateService(ci);
+	
+
+	foreach(var entity in entityNames) 
+	{
+		var controllerName = ps.Pluralize(entity) + "Controller";
+
+		if(controllerNames.Any(x => x == controllerName))
+		{
+			continue;
+		}
+#>
+	public class <#=controllerName#> : ODataControllerBase<<#=entity#>>
+	{
+		public <#=controllerName#>(IProtectableDbContext protectableDbContext) : base(protectableDbContext)
+		{
+		}
+	}
+
+<#
+}
+#>
+}
+
+<#+
+
+	private DTE GetDTE()
+	{
+		return (this.Host as IServiceProvider).GetService(typeof(DTE)) as DTE;
+	}
+
+	private Project GetProjecByName(DTE dte, string projectName)
+    {
+        return dte.Solution
+				.Projects
+				.Cast<Project>()
+				.FirstOrDefault(x => x.Name == projectName);
+    }
+
+	private List<ProjectItem> GetProjectItemsRecursively(ProjectItems items)
+	{
+		var ret = new List<ProjectItem>();
+		if (items == null) return ret;
+		foreach(ProjectItem item in items)
+		{
+		ret.Add(item);
+		ret.AddRange(GetProjectItemsRecursively(item.ProjectItems));
+		}
+		return ret;
+	}
+
+	private List<CodeClass> GetProjectDefinedTypes(Project project)
+	{
+		var result = new List<CodeClass>();
+		foreach(ProjectItem item in GetProjectItemsRecursively(project.ProjectItems))
+		{
+			if (item.FileCodeModel == null) continue;
+
+			foreach(CodeNamespace ns in item.FileCodeModel.CodeElements.OfType<CodeNamespace>())
+			{
+				foreach (CodeClass cc in ns.Members.OfType<CodeClass>())
+				{
+					result.Add(cc);
+				}
+			}
+
+		}
+		return result;
+	}
+
+    private List<string> GetControllerNames(List<CodeClass> definedTypes)
+    {
+        var controllerNames = new List<string>();
+
+		foreach (var type in definedTypes)
+		{
+			if (type.Bases.OfType<CodeClass>().Any(x => x.Name == "ODataControllerBase`1"))
+			{
+				controllerNames.Add(type.Name);
+			}
+		}
+
+		return controllerNames;
+    }
+
+	private List<string> GetEntityNames(List<CodeClass> definedTypes) 
+	{
+		var entityNames = new List<string>();
+		foreach (var type in definedTypes)
+		{
+			if (type.Bases.OfType<CodeClass>().Any(x => x.Name == "ModelBase"))
+			{
+				entityNames.Add(type.Name);
+			}
+		}
+
+		return entityNames;
+	}
+
+
+#>
